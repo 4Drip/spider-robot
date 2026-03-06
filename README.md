@@ -2,7 +2,7 @@
 
 A four-legged spider robot controlled by an Arduino and a Raspberry Pi with simple AI behavior.
 
-## English
+## 🇺🇸/🇬🇧 English
 
 This project is a small four-legged spider robot controlled by an Arduino and a Raspberry Pi.
 
@@ -26,7 +26,7 @@ This project was developed as a school robotics project.
 - Sensors
 - External power supply / power bank
 
-## Italiano
+## 🇮🇹 Italiano
 
 Questo progetto è un piccolo robot ragno a quattro zampe controllato da un Arduino e un Raspberry Pi.
 
