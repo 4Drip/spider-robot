@@ -6,8 +6,9 @@ d4 = ultrasonic-sensor center echo
 d5 = ultrasonic-sensor left trig
 d6 = ultrasonic-sensor right trig
 d7 = ultrasonic-sensor center trig
-d8 = screen sda
-d9 = screen scl
+
+a4 = screen sda
+a5 = screen scl
 
 a4 = driver sda
 a5 = driver scl
