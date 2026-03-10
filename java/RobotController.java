@@ -1,5 +1,3 @@
-package SpiderRobot;
-
 import javax.swing.*;
 import java.awt.*;
 import java.io.OutputStream;
