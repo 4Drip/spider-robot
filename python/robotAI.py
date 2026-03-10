@@ -1,68 +1,31 @@
 import numpy as np
 import random
 import tensorflow as tf
+import serial
+import time
 
-num_samples = 4000
-data_X = []
-data_y = []
+# Connect to Arduino
+arduino = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+time.sleep(2)
 
-for _ in range(num_samples):
-    if random.random() < 0.65:
-        front = random.randint(25, 50)
-    else:
-        front = random.randint(0, 25)
+print("Connected to Arduino")
 
-    if front < 20:
-        left = random.randint(10, 50)
-        right = random.randint(10, 50)
-    else:
-        left = random.randint(0, 50)
-        right = random.randint(0, 50)
+# Load TFLite model
+interpreter = tf.lite.Interpreter(model_path="tiny_robot_model.tflite")
+interpreter.allocate_tensors()
 
-    if front < 8:
-        action = 3
-    elif front < 20:
-        action = 1 if left > right else 2
-    else:
-        action = 0
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
-    data_X.append([front, left, right])
-    data_y.append(action)
+action_map = {
+    0: "MOVE_FORWARD",
+    1: "TURN_LEFT",
+    2: "TURN_RIGHT",
+    3: "STOP"
+}
 
-X = np.array(data_X, dtype=float)
-y = np.array(data_y)
-
-X = X / 50.0
-
-
-
-model = tf.keras.Sequential([
-    tf.keras.layers.Input(shape=(3,)),
-    tf.keras.layers.Dense(12, activation='relu'),
-    tf.keras.layers.Dense(8, activation='relu'),
-    tf.keras.layers.Dense(4, activation='softmax')
-])
-
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
-)
-
-print("Training tiny robot AI...")
-model.fit(X, y, epochs=40, batch_size=32, verbose=1)
-
-
-
-converter = tf.lite.TFLiteConverter.from_keras_model(model)
-tflite_model = converter.convert()
-
-with open("tiny_robot_model.tflite", "wb") as f:
-    f.write(tflite_model)
-
-print("Model converted to tiny_robot_model.tflite!")
-
-
+def send_command(cmd):
+    arduino.write((cmd + "\n").encode())
 
 def decide_face(front, left, right):
     danger = sum([front < 8, left < 8, right < 8])
@@ -77,42 +40,41 @@ def decide_face(front, left, right):
     else:
         return random.choice(["happy", "neutral"])
 
-
-
 def maybe_random_move(pred_action, front):
-    # Only explore when safe
     if front > 30 and random.random() < 0.02:
-        return random.choice([1, 2])  # random turn
+        return random.choice([1, 2])
     return pred_action
 
 
+print("\nRobot AI running...\n")
 
-print("\nSimulating robot behavior:\n")
+while True:
 
-action_map = {
-    0: "MOVE_FORWARD",
-    1: "TURN_LEFT",
-    2: "TURN_RIGHT",
-    3: "STOP"
-}
+    # TODO: replace with real sensor values later
+    front = random.randint(0, 50)
+    left = random.randint(0, 50)
+    right = random.randint(0, 50)
 
-for _ in range(200000):
+    input_data = np.array([[front, left, right]], dtype=np.float32) / 50.0
 
-    test_front = random.randint(0, 50)
-    test_left = random.randint(0, 50)
-    test_right = random.randint(0, 50)
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.invoke()
 
-    input_data = np.array([[test_front, test_left, test_right]], dtype=float) / 50.0
-
-    pred_probs = model.predict(input_data, verbose=0)
+    pred_probs = interpreter.get_tensor(output_details[0]['index'])
     action = np.argmax(pred_probs)
 
-    action = maybe_random_move(action, test_front)
-    face = decide_face(test_front, test_left, test_right)
+    action = maybe_random_move(action, front)
+
+    command = action_map[action]
+    send_command(command)
+
+    face = decide_face(front, left, right)
 
     print(
-        f"Front={test_front:2d}, "
-        f"Left={test_left:2d}, "
-        f"Right={test_right:2d} -> "
-        f"{action_map[action]:13s} | Face={face}"
+        f"Front={front:2d}, "
+        f"Left={left:2d}, "
+        f"Right={right:2d} -> "
+        f"{command:13s} | Face={face}"
     )
+
+    time.sleep(0.2)
