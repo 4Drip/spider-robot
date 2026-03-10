@@ -35,23 +35,23 @@ y = np.array(data_y)
 X = X / 50.0
 
 
-
-model = tf.keras.Sequential([
-    tf.keras.layers.Input(shape=(3,)),
-    tf.keras.layers.Dense(12, activation='relu'),
-    tf.keras.layers.Dense(8, activation='relu'),
-    tf.keras.layers.Dense(4, activation='softmax')
-])
+model = tf.keras.Sequential(
+    [
+        tf.keras.layers.Input(shape=(3,)),
+        tf.keras.layers.Dense(12, activation="relu"),
+        tf.keras.layers.Dense(8, activation="relu"),
+        tf.keras.layers.Dense(4, activation="softmax"),
+    ]
+)
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"],
 )
 
 print("Training tiny robot AI...")
 model.fit(X, y, epochs=40, batch_size=32, verbose=1)
-
 
 
 converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -61,7 +61,6 @@ with open("tiny_robot_model.tflite", "wb") as f:
     f.write(tflite_model)
 
 print("Model converted to tiny_robot_model.tflite!")
-
 
 
 def decide_face(front, left, right):
@@ -78,7 +77,6 @@ def decide_face(front, left, right):
         return random.choice(["happy", "neutral"])
 
 
-
 def maybe_random_move(pred_action, front):
     # Only explore when safe
     if front > 30 and random.random() < 0.02:
@@ -86,15 +84,9 @@ def maybe_random_move(pred_action, front):
     return pred_action
 
 
-
 print("\nSimulating robot behavior:\n")
 
-action_map = {
-    0: "MOVE_FORWARD",
-    1: "TURN_LEFT",
-    2: "TURN_RIGHT",
-    3: "STOP"
-}
+action_map = {0: "MOVE_FORWARD", 1: "TURN_LEFT", 2: "TURN_RIGHT", 3: "STOP"}
 
 for _ in range(200000):
 
