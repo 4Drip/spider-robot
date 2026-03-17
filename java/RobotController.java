@@ -1,4 +1,4 @@
-mport javax.swing.*;
+import javax.swing.*;
 
 import java.awt.*;
 
@@ -182,3 +182,4 @@ public class RobotController {
         System.out.println(isManual ? "Modalità manuale attivata" : "Modalità IA attivata");
 
     }
+}
