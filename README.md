@@ -21,7 +21,7 @@ This project was developed as a school robotics project.
 - Arduino (motor controller)
 - Raspberry Pi Zero 2 W (AI and logic)
 - PCA9685 servo driver
-- 8× servo motors
+- 12× servo motors SG90
 - OLED display
 - Sensors
 - External power supply / power bank
@@ -45,7 +45,7 @@ Questo progetto è stato sviluppato come progetto scolastico di robotica.
 - Arduino (controllo dei motori)
 - Raspberry Pi Zero 2 W (AI e logica)
 - driver servo PCA9685
-- 8× servomotori
+- 12× servomotori SG90
 - display OLED
 - sensori
 - alimentazione esterna / power bank
