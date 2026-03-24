@@ -22,7 +22,7 @@ public class RobotController {
 
         try {
 
-            Socket socket = new Socket("192.168.1.123", 5000); // IP Raspberry
+            Socket socket = new Socket("0.0.174.33", 5000); // IP Raspberry
 
             writer = new PrintWriter(socket.getOutputStream(), true);
 

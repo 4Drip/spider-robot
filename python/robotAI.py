@@ -1,14 +1,21 @@
 import numpy as np
 import random
 import tensorflow as tf
-import serial
 import time
 
-# Connect to Arduino
-arduino = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
-time.sleep(2)
+USE_ARDUINO = False
 
-print("Connected to Arduino")
+if USE_ARDUINO:
+    import serial
+    arduino = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+    time.sleep(2)
+    print("Connected to Arduino")
+
+def send_command(cmd):
+    if USE_ARDUINO:
+        arduino.write((cmd + "\n").encode())
+    else:
+        print("SEND:", cmd)
 
 # Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="tiny_robot_model.tflite")
