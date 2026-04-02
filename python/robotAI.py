@@ -1,7 +1,11 @@
 import numpy as np
 import random
-import tensorflow as tf
 import time
+import tflite_runtime.interpreter as tflite
+
+# =========================
+# CONFIG
+# =========================
 
 USE_ARDUINO = False
 
@@ -11,18 +15,29 @@ if USE_ARDUINO:
     time.sleep(2)
     print("Connected to Arduino")
 
+# =========================
+# SEND COMMAND (SAFE)
+# =========================
+
 def send_command(cmd):
     if USE_ARDUINO:
         arduino.write((cmd + "\n").encode())
     else:
         print("SEND:", cmd)
 
-# Load TFLite model
-interpreter = tf.lite.Interpreter(model_path="tiny_robot_model.tflite")
+# =========================
+# LOAD TFLITE MODEL
+# =========================
+
+interpreter = tflite.Interpreter(model_path="tiny_robot_model.tflite")
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
+
+# =========================
+# ACTION MAP
+# =========================
 
 action_map = {
     0: "MOVE_FORWARD",
@@ -31,8 +46,9 @@ action_map = {
     3: "STOP"
 }
 
-def send_command(cmd):
-    arduino.write((cmd + "\n").encode())
+# =========================
+# LOGIC HELPERS
+# =========================
 
 def decide_face(front, left, right):
     danger = sum([front < 8, left < 8, right < 8])
@@ -47,34 +63,43 @@ def decide_face(front, left, right):
     else:
         return random.choice(["happy", "neutral"])
 
+
 def maybe_random_move(pred_action, front):
     if front > 30 and random.random() < 0.02:
         return random.choice([1, 2])
     return pred_action
 
+# =========================
+# AI LOOP
+# =========================
 
 print("\nRobot AI running...\n")
 
 while True:
 
-    # TODO: replace with real sensor values later
+    # TODO: replace with real Arduino sensors
     front = random.randint(0, 50)
     left = random.randint(0, 50)
     right = random.randint(0, 50)
 
+    # normalize input
     input_data = np.array([[front, left, right]], dtype=np.float32) / 50.0
 
+    # inference
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
 
-    pred_probs = interpreter.get_tensor(output_details[0]['index'])
-    action = np.argmax(pred_probs)
+    pred = interpreter.get_tensor(output_details[0]['index'])
+    action = np.argmax(pred)
 
+    # small exploration tweak
     action = maybe_random_move(action, front)
 
+    # command output
     command = action_map[action]
     send_command(command)
 
+    # emotional state
     face = decide_face(front, left, right)
 
     print(

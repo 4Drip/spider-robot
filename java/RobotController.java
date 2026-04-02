@@ -166,20 +166,14 @@ public class RobotController {
     // Metodo per alternare tra modalità manuale e IA
 
     static void toggleMode(JButton modeButton) {
+    isManual = !isManual;
 
-        isManual = !isManual;
-
-        if (isManual) {
-
-            modeButton.setText("Modalità: Manuale");
-
-        } else {
-
-            modeButton.setText("Modalità: IA");
-
-        }
-
-        System.out.println(isManual ? "Modalità manuale attivata" : "Modalità IA attivata");
-
+    if (isManual) {
+        modeButton.setText("Modalità: Manuale");
+        sendCommand("MODE_MANUAL");
+    } else {
+        modeButton.setText("Modalità: IA");
+        sendCommand("MODE_AI");
     }
+}
 }
