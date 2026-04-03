@@ -1,179 +1,100 @@
 import javax.swing.*;
-
 import java.awt.*;
-
 import java.io.PrintWriter;
-
 import java.net.Socket;
-
 
 public class RobotController {
 
-
     static PrintWriter writer;
+    static boolean isManual = true;
 
-    static boolean isManual = true; // Variabile per tenere traccia della modalità
-
+    static JButton forward;
+    static JButton left;
+    static JButton right;
+    static JButton backward;
+    static JButton modeToggle;
 
     public static void main(String[] args) {
 
-
-        // Connetti al Raspberry su WiFi
-
+        // CONNECT TO RASPBERRY PI
         try {
-
-            Socket socket = new Socket("0.0.174.33", 5000); // IP Raspberry
-
+            Socket socket = new Socket("192.168.1.100", 5000); // CHANGE THIS
             writer = new PrintWriter(socket.getOutputStream(), true);
-
             System.out.println("Connected via WiFi");
-
         } catch(Exception e){
-
-            e.printStackTrace();
-
+            JOptionPane.showMessageDialog(null, "Connection failed!");
+            System.exit(1);
         }
-
 
         // GUI
-
         JFrame frame = new JFrame("Robot Controller");
-
         frame.setSize(300, 300);
-
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-
-        // Creazione dei bottoni
-
-        JButton forward = new JButton("Avanti");
-
-        JButton left = new JButton("Sinistra");
-
-        JButton right = new JButton("Destra");
-
-        JButton backward = new JButton("Indietro");
-
-        JButton modeToggle = new JButton("Modalità: Manuale");
-
-
-        // Aggiunta degli ascoltatori agli eventi dei bottoni
+        forward = new JButton("Avanti");
+        left = new JButton("Sinistra");
+        right = new JButton("Destra");
+        backward = new JButton("Stop");
+        modeToggle = new JButton("Modalità: Manuale");
 
         forward.addActionListener(e -> sendCommand("F"));
-
         left.addActionListener(e -> sendCommand("L"));
-
         right.addActionListener(e -> sendCommand("R"));
+        backward.addActionListener(e -> sendCommand("S"));
 
-        backward.addActionListener(e -> sendCommand("B"));
-
-        
-
-        // Cambia la modalità tra manuale e IA
-
-        modeToggle.addActionListener(e -> toggleMode(modeToggle));
-
-
-        // Creazione del layout
+        modeToggle.addActionListener(e -> toggleMode());
 
         JPanel panel = new JPanel(new GridBagLayout());
-
         GridBagConstraints gbc = new GridBagConstraints();
 
-        
-
-        // Posiziona il tasto "Avanti" al centro (prima riga)
-
-        gbc.gridx = 1;
-
-        gbc.gridy = 0;
-
-        gbc.gridwidth = 1;
-
-        gbc.anchor = GridBagConstraints.CENTER;
-
+        gbc.gridx = 1; gbc.gridy = 0;
         panel.add(forward, gbc);
 
-
-        // Posiziona i bottoni "Sinistra" e "Destra" ai lati (seconda riga)
-
-        gbc.gridx = 0;
-
-        gbc.gridy = 1;
-
-        gbc.anchor = GridBagConstraints.CENTER;
-
+        gbc.gridx = 0; gbc.gridy = 1;
         panel.add(left, gbc);
 
-
-        gbc.gridx = 2;
-
-        gbc.gridy = 1;
-
-        gbc.anchor = GridBagConstraints.CENTER;
-
+        gbc.gridx = 2; gbc.gridy = 1;
         panel.add(right, gbc);
 
-
-        // Posiziona il tasto "Indietro" in basso (terza riga)
-
-        gbc.gridx = 1;
-
-        gbc.gridy = 2;
-
-        gbc.anchor = GridBagConstraints.CENTER;
-
+        gbc.gridx = 1; gbc.gridy = 2;
         panel.add(backward, gbc);
 
-
-        // Posiziona il tasto per cambiare modalità in basso a sinistra
-
-        gbc.gridx = 0;
-
-        gbc.gridy = 3;
-
+        gbc.gridx = 0; gbc.gridy = 3;
         gbc.gridwidth = 3;
-
-        gbc.anchor = GridBagConstraints.CENTER;
-
         panel.add(modeToggle, gbc);
 
-
-        // Aggiungi il pannello alla finestra
-
         frame.add(panel);
-
         frame.setVisible(true);
-
     }
-
-
-    // Metodo per inviare il comando al Raspberry Pi
 
     static void sendCommand(String cmd) {
-
-        if (writer != null) {
-
+        if (writer != null && isManual) {
             writer.println(cmd);
-
             System.out.println("Sent: " + cmd);
+        }
+    }
 
+    static void toggleMode() {
+        isManual = !isManual;
+
+        if (isManual) {
+            modeToggle.setText("Modalità: Manuale");
+            sendRaw("MODE_MANUAL");
+        } else {
+            modeToggle.setText("Modalità: IA");
+            sendRaw("MODE_AI");
         }
 
+        forward.setEnabled(isManual);
+        left.setEnabled(isManual);
+        right.setEnabled(isManual);
+        backward.setEnabled(isManual);
     }
 
-
-    // Metodo per alternare tra modalità manuale e IA
-
-    static void toggleMode(JButton modeButton) {
-    isManual = !isManual;
-
-    if (isManual) {
-        modeButton.setText("Modalità: Manuale");
-        sendCommand("MODE_MANUAL");
-    } else {
-        modeButton.setText("Modalità: IA");
-        sendCommand("MODE_AI");
+    static void sendRaw(String cmd) {
+        if (writer != null) {
+            writer.println(cmd);
+            System.out.println("Sent: " + cmd);
+        }
     }
-}
 }
