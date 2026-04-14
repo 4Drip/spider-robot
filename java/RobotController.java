@@ -28,8 +28,8 @@ public class RobotController {
     public static void main(String[] args) {
         // Chiedi IP
         String ip = JOptionPane.showInputDialog(null,
-            "Inserisci IP del Raspberry Pi:", "192.168.1.100");
-        if (ip == null || ip.isEmpty()) ip = "192.168.1.100";
+            "Inserisci IP del Raspberry Pi:", "10.162.106.33");
+        if (ip == null || ip.isEmpty()) ip = "10.162.106.33";
 
         try {
             socket = new Socket(ip, 5000);
