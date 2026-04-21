@@ -11,8 +11,6 @@ PORT = 5000
 
 # ── Auto-detect Arduino serial port ───────────────────────────
 def find_arduino():
-    """Try to find the Arduino automatically."""
-    # Common Arduino port patterns
     candidates = []
     for port in serial.tools.list_ports.comports():
         desc = (port.description or "").lower()
@@ -21,14 +19,9 @@ def find_arduino():
             candidates.append(port.device)
         elif any(x in name for x in ["ttyacm", "ttyusb"]):
             candidates.append(port.device)
-
     if candidates:
         print(f"Arduino trovato su: {candidates[0]}")
-        if len(candidates) > 1:
-            print(f"  (altri candidati: {candidates[1:]})")
         return candidates[0]
-
-    # Fallback: try common ports in order
     for fallback in ["/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyUSB0", "/dev/ttyUSB1"]:
         try:
             s = serial.Serial(fallback, 9600, timeout=0.5)
@@ -37,7 +30,6 @@ def find_arduino():
             return fallback
         except:
             pass
-
     return None
 
 port = find_arduino()
@@ -49,7 +41,7 @@ if port is None:
 
 try:
     arduino = serial.Serial(port, 9600, timeout=1)
-    time.sleep(2)  # wait for Arduino reset
+    time.sleep(2)
     print(f"Arduino connesso su {port}")
 except Exception as e:
     print(f"Errore apertura seriale: {e}")
@@ -64,11 +56,13 @@ last_cmd   = None
 mood       = "neutral"
 mood_timer = 0
 
-# ── Lock per scrittura seriale (thread-safe) ───────────────────
+# ── Lista client connessi (per il push continuo) ───────────────
+clients_lock = threading.Lock()
+connected_clients = []   # list of socket objects
+
 serial_lock = threading.Lock()
 
 def send_to_arduino(cmd: str):
-    global last_cmd
     with serial_lock:
         try:
             arduino.write((cmd + "\n").encode())
@@ -85,10 +79,27 @@ def send_move(cmd: str):
         send_to_arduino(cmd)
         last_cmd = cmd
 
+# ── Broadcast sonar a tutti i client connessi ─────────────────
+def broadcast_sonar():
+    """Push SONAR data to every connected client every 300ms."""
+    while True:
+        msg = f"SONAR:{dist_front},{dist_left},{dist_right}\n".encode()
+        with clients_lock:
+            dead = []
+            for conn in connected_clients:
+                try:
+                    conn.sendall(msg)
+                except:
+                    dead.append(conn)
+            for conn in dead:
+                connected_clients.remove(conn)
+        time.sleep(0.3)   # push 3x per second
+
 # ── Thread lettura seriale Arduino ────────────────────────────
 def serial_reader():
     global dist_front, dist_left, dist_right
     buf = ""
+    last_print = 0
     while True:
         try:
             if arduino.in_waiting:
@@ -100,13 +111,14 @@ def serial_reader():
                         parts = line[6:].split(",")
                         if len(parts) == 3:
                             try:
-                                f = int(parts[0])
-                                l = int(parts[1])
-                                r = int(parts[2])
-                                dist_front = f
-                                dist_left  = l
-                                dist_right = r
-                                # Print sonar data every ~2s to avoid log spam
+                                dist_front = int(parts[0])
+                                dist_left  = int(parts[1])
+                                dist_right = int(parts[2])
+                                # log sonar only every 2s to avoid spam
+                                now = time.time()
+                                if now - last_print > 2.0:
+                                    print(f"  [sonar] F={dist_front} L={dist_left} R={dist_right}")
+                                    last_print = now
                             except ValueError:
                                 pass
                     elif line:
@@ -162,6 +174,11 @@ def ai_loop():
 def handle_client(conn, addr):
     global is_manual
     print(f"Client connesso: {addr}")
+
+    # Register this client for sonar broadcasts
+    with clients_lock:
+        connected_clients.append(conn)
+
     try:
         while True:
             data = conn.recv(1024)
@@ -187,32 +204,32 @@ def handle_client(conn, addr):
                     send_move(cmd)
                     face_map = {"F":"happy","B":"annoyed","L":"cute","R":"cute","S":"neutral"}
                     send_face(face_map.get(cmd, "neutral"))
-
-                # Always reply with latest sonar data
-                try:
+                    # immediate sonar reply on command too
                     conn.sendall(f"SONAR:{dist_front},{dist_left},{dist_right}\n".encode())
-                except:
-                    break
 
     except ConnectionResetError:
         print("Client disconnesso")
     except Exception as e:
         print(f"Errore client: {e}")
     finally:
+        with clients_lock:
+            if conn in connected_clients:
+                connected_clients.remove(conn)
         conn.close()
         print(f"Connessione chiusa: {addr}")
 
 # ── Main ───────────────────────────────────────────────────────
 if __name__ == "__main__":
-    threading.Thread(target=serial_reader, daemon=True).start()
-    threading.Thread(target=ai_loop, daemon=True).start()
+    threading.Thread(target=serial_reader,  daemon=True).start()
+    threading.Thread(target=ai_loop,        daemon=True).start()
+    threading.Thread(target=broadcast_sonar, daemon=True).start()  # <-- new
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((HOST, PORT))
     server.listen(5)
     print(f"Server in ascolto su {HOST}:{PORT}...")
-    print(f"IP del Raspberry Pi: usa 'hostname -I' per trovarlo")
+    print("Usa 'hostname -I' per trovare l'IP del Raspberry Pi")
 
     while True:
         conn, addr = server.accept()

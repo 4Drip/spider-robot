@@ -28,12 +28,12 @@ public class RobotController {
     public static void main(String[] args) {
         // Chiedi IP
         String ip = JOptionPane.showInputDialog(null,
-            "Inserisci IP del Raspberry Pi:", "10.162.106.33");
-        if (ip == null || ip.isEmpty()) ip = "10.162.106.33";
+            "Inserisci IP del Raspberry Pi:", "192.168.1.100");
+        if (ip == null || ip.isEmpty()) ip = "192.168.1.100";
 
         try {
             socket = new Socket(ip, 5000);
-            socket.setSoTimeout(100); // non-blocking read
+            socket.setSoTimeout(1000); // 1s timeout so readLine() has time to complete
             writer = new PrintWriter(socket.getOutputStream(), true);
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             System.out.println("Connesso a " + ip);
@@ -230,23 +230,30 @@ public class RobotController {
         while (true) {
             try {
                 String line = reader.readLine();
-                if (line == null) { Thread.sleep(50); continue; }
-                System.out.println("Ricevuto: " + line);
+                if (line == null) { Thread.sleep(20); continue; }
 
                 if (line.startsWith("SONAR:")) {
                     String[] parts = line.substring(6).split(",");
                     if (parts.length == 3) {
-                        distFront = Integer.parseInt(parts[0].trim());
-                        distLeft  = Integer.parseInt(parts[1].trim());
-                        distRight = Integer.parseInt(parts[2].trim());
-                        SwingUtilities.invokeLater(RobotController::updateSonarUI);
+                        try {
+                            distFront = Integer.parseInt(parts[0].trim());
+                            distLeft  = Integer.parseInt(parts[1].trim());
+                            distRight = Integer.parseInt(parts[2].trim());
+                            SwingUtilities.invokeLater(RobotController::updateSonarUI);
+                        } catch (NumberFormatException ignored) {}
                     }
+                } else if (line.startsWith("ACK:")) {
+                    System.out.println("ACK ricevuto: " + line);
                 }
             } catch (SocketTimeoutException e) {
-                // normale, continua
+                // 1s timeout expired with no data - normal, keep going
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() ->
                     lblStatus.setText("● Disconnesso"));
+                System.out.println("Connessione persa: " + e.getMessage());
                 break;
             }
         }
