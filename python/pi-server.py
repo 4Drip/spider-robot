@@ -1,8 +1,3 @@
-"""
-pi_server.py  -  Raspberry Pi bridge
-Java App -> WiFi TCP -> RPi -> Serial -> Arduino
-"""
-
 import socket
 import threading
 import time
