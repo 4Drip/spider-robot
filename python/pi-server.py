@@ -33,9 +33,9 @@ def find_arduino():
 
 port = find_arduino()
 if not port:
-    print("ERROR: Arduino not found. Check USB cable and run:")
+    print("ERROR: Arduino not found.")
     print("  ls /dev/ttyACM* /dev/ttyUSB*")
-    print("  sudo usermod -a -G dialout $USER  (then log out/in)")
+    print("  sudo usermod -a -G dialout $USER")
     sys.exit(1)
 
 try:
@@ -43,8 +43,7 @@ try:
     time.sleep(2)
     print(f"Arduino connected on {port}")
 except Exception as e:
-    print(f"Serial open failed: {e}")
-    sys.exit(1)
+    print(f"Serial open failed: {e}"); sys.exit(1)
 
 # ── Shared state ───────────────────────────────────────────────
 is_manual  = True
@@ -57,7 +56,7 @@ mood_timer = 0
 
 serial_lock  = threading.Lock()
 clients_lock = threading.Lock()
-connected_clients = []          # active Java connections
+connected_clients = []   # list of (conn, addr)
 
 # ── Serial helpers ─────────────────────────────────────────────
 def send_to_arduino(cmd: str):
@@ -68,9 +67,7 @@ def send_to_arduino(cmd: str):
         except Exception as e:
             print(f"Serial write error: {e}")
 
-def send_face(name: str):
-    send_to_arduino(f"FACE:{name}")
-
+def send_face(name: str):   send_to_arduino(f"FACE:{name}")
 def send_move(cmd: str):
     global last_cmd
     if cmd != last_cmd:
@@ -79,7 +76,6 @@ def send_move(cmd: str):
 
 # ── Thread 1: read Arduino serial ─────────────────────────────
 def serial_reader():
-    """Reads SONAR:F,L,R lines from Arduino. Restarts on error."""
     global dist_front, dist_left, dist_right
     last_log = 0
     while True:
@@ -89,8 +85,7 @@ def serial_reader():
                 if arduino.in_waiting:
                     c = arduino.read().decode("utf-8", errors="ignore")
                     if c == "\n":
-                        line = buf.strip()
-                        buf  = ""
+                        line = buf.strip(); buf = ""
                         if line.startswith("SONAR:"):
                             parts = line[6:].split(",")
                             if len(parts) == 3:
@@ -111,33 +106,50 @@ def serial_reader():
                 else:
                     time.sleep(0.005)
         except Exception as e:
-            print(f"serial_reader crashed: {e} — restarting in 1s")
+            print(f"serial_reader crashed: {e} — restart in 1s")
             time.sleep(1)
 
-# ── Thread 2: push sonar to all Java clients every 300ms ───────
+# ── Thread 2: push sonar a tutti i client ogni 300ms ──────────
+# FIX DEADLOCK: copia la lista PRIMA di rilasciare il lock,
+# poi chiama sendall() FUORI dal lock.
+# Se sendall() blocca su un client morto, non blocca gli altri.
 def broadcast_sonar():
-    """Continuously pushes sonar data to every connected Java client.
-    This is the main fix: data flows even when no button is pressed."""
     while True:
         try:
             msg = f"SONAR:{dist_front},{dist_left},{dist_right}\n".encode()
-            dead = []
+
+            # --- snapshot veloce della lista, poi rilascia subito il lock ---
             with clients_lock:
-                for conn in connected_clients:
-                    try:
-                        conn.sendall(msg)
-                    except Exception:
-                        dead.append(conn)
-                for conn in dead:
-                    connected_clients.remove(conn)
+                snapshot = list(connected_clients)
+
+            dead = []
+            for conn in snapshot:
+                try:
+                    # timeout 0.5s: se il client non ACK entro 0.5s viene rimosso
+                    conn.settimeout(0.5)
+                    conn.sendall(msg)
+                    conn.settimeout(None)
+                except Exception:
+                    dead.append(conn)
+
+            if dead:
+                with clients_lock:
+                    for conn in dead:
+                        if conn in connected_clients:
+                            connected_clients.remove(conn)
+                        try: conn.close()
+                        except: pass
+                print(f"  [broadcast] removed {len(dead)} dead client(s)")
+
         except Exception as e:
             print(f"broadcast_sonar error: {e}")
+
         time.sleep(0.3)
 
-# ── Thread 3: AI movement logic ────────────────────────────────
+# ── Thread 3: AI ───────────────────────────────────────────────
 def decide_movement() -> str:
-    if dist_front < 8:   return "S"
-    if dist_front < 20:  return "L" if dist_left > dist_right else "R"
+    if dist_front < 8:  return "S"
+    if dist_front < 20: return "L" if dist_left > dist_right else "R"
     if random.random() < 0.04: return random.choice(["L","R"])
     return "F"
 
@@ -170,10 +182,11 @@ def ai_loop():
             print(f"ai_loop error: {e}")
         time.sleep(0.3)
 
-# ── Thread per client: receives commands from Java ─────────────
+# ── Thread per client Java ─────────────────────────────────────
 def handle_client(conn, addr):
     global is_manual
     print(f"Java client connected: {addr}")
+    conn.settimeout(30)   # 30s inactivity timeout
     with clients_lock:
         connected_clients.append(conn)
     try:
@@ -183,8 +196,7 @@ def handle_client(conn, addr):
                 break
             for raw in data.decode(errors="ignore").splitlines():
                 cmd = raw.strip()
-                if not cmd:
-                    continue
+                if not cmd: continue
                 print(f"[Java] {cmd}")
                 if cmd == "MODE_AI":
                     is_manual = False
@@ -198,18 +210,14 @@ def handle_client(conn, addr):
                     send_move(cmd)
                     faces = {"F":"happy","B":"annoyed","L":"cute","R":"cute","S":"neutral"}
                     send_face(faces.get(cmd,"neutral"))
-    except ConnectionResetError:
-        pass
     except Exception as e:
-        print(f"handle_client error: {e}")
+        print(f"handle_client {addr}: {e}")
     finally:
         with clients_lock:
             if conn in connected_clients:
                 connected_clients.remove(conn)
-        try:
-            conn.close()
-        except:
-            pass
+        try: conn.close()
+        except: pass
         print(f"Java client disconnected: {addr}")
 
 # ── Main ───────────────────────────────────────────────────────
@@ -223,9 +231,9 @@ if __name__ == "__main__":
     srv.bind((HOST, PORT))
     srv.listen(5)
     print(f"Listening on {HOST}:{PORT}")
-    print("Find your Pi IP with:  hostname -I")
+    print("Find Pi IP:  hostname -I")
 
     while True:
         conn, addr = srv.accept()
         threading.Thread(target=handle_client, args=(conn, addr),
-                         daemon=True, name=f"client-{addr}").start()
+                         daemon=True, name=f"client-{addr[0]}").start()
