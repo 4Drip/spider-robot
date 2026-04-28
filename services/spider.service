@@ -1,0 +1,16 @@
+[Unit]
+Description=Spider Robot Python Script
+After=network.target
+
+[Service]
+ExecStartPre=/bin/sleep 5
+User=drip
+WorkingDirectory=/home/drip/Desktop/spider-robot/python
+ExecStart=/home/drip/Desktop/progetto/venv/bin/python -u /home/drip/Desktop/spider-robot/python/pi-server.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
