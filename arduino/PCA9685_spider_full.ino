@@ -1,14 +1,6 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <NewPing.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-
-// ── OLED ─────────────────────────────────────────────────────
-#define SCREEN_WIDTH  128
-#define SCREEN_HEIGHT  64
-#define OLED_RESET     -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // ── PCA9685 ──────────────────────────────────────────────────
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
@@ -16,14 +8,6 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 #define SERVOMIN   150
 #define SERVOMAX   600
 
-// I2C bus: A4=SDA, A5=SCL  (shared with OLED at 0x3C, PCA9685 at 0x40)
-// Power wiring (no code needed – physical connections only):
-//   Power bank USB -> Arduino 5V & GND pins (top of board)
-//     5V pin -> HC-SR04 #1,#2,#3 VCC
-//     5V pin -> OLED VCC
-//     GND    -> all sensor GND, OLED GND
-//   Power bank -> PCA9685 V+ screw terminal -> servo rail (separate supply)
-//   PCA9685 GND -> Arduino GND (common ground)
 uint16_t angleToPulse(float a) {
   a = constrain(a, 0, 180);
   return (uint16_t)(SERVOMIN + (a / 180.0f) * (SERVOMAX - SERVOMIN));
@@ -55,175 +39,6 @@ unsigned long last_sonar_ms = 0;
 
 // ── Modalita ─────────────────────────────────────────────────
 bool ai_mode = false;
-
-// ── Faccine: usiamo #define invece di enum ────────────────────
-// Cosi il compilatore Arduino non si confonde con il pre-processing
-#define FACE_NEUTRAL  0
-#define FACE_HAPPY    1
-#define FACE_SAD      2
-#define FACE_ANGRY    3
-#define FACE_ANNOYED  4
-#define FACE_CUTE     5
-#define FACE_SCARED   6
-#define FACE_WALK     7
-#define FACE_TURN_L   8
-#define FACE_TURN_R   9
-
-int current_face     = FACE_NEUTRAL;
-int last_drawn_face  = -1;
-
-// ── Helper: ellisse piena ─────────────────────────────────────
-void gfx_ellipse(int cx, int cy, int rx, int ry, uint16_t col) {
-  for (int dy = -ry; dy <= ry; dy++)
-    for (int dx = -rx; dx <= rx; dx++)
-      if ((long)dx*dx*ry*ry + (long)dy*dy*rx*rx <= (long)rx*rx*ry*ry)
-        display.drawPixel(cx+dx, cy+dy, col);
-}
-
-// ── Etichetta centrata in fondo ───────────────────────────────
-void printLabel(const char* txt) {
-  display.setTextSize(1);
-  int16_t bx, by; uint16_t bw, bh;
-  display.getTextBounds(txt, 0, 0, &bx, &by, &bw, &bh);
-  display.setCursor((128 - (int)bw) / 2, 55);
-  display.print(txt);
-}
-
-// ── Disegna faccina ───────────────────────────────────────────
-void drawFace(int face) {
-  if (face == last_drawn_face) return;
-  last_drawn_face = face;
-
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.drawRoundRect(0, 0, 128, 64, 8, SSD1306_WHITE);
-
-  const int ex1=38, ex2=90, ey=22, mx=64, my=46;
-
-  switch (face) {
-
-    case FACE_HAPPY:
-      display.fillCircle(ex1, ey, 8, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 8, SSD1306_WHITE);
-      display.fillRect(ex1-9, ey-9, 18, 10, SSD1306_BLACK);
-      display.fillRect(ex2-9, ey-9, 18, 10, SSD1306_BLACK);
-      for (int i=-18; i<=18; i++)
-        display.drawPixel(mx+i, my+(int)(0.03f*i*i), SSD1306_WHITE);
-      display.fillCircle(ex1-12, ey+14, 5, SSD1306_WHITE);
-      display.fillCircle(ex2+12, ey+14, 5, SSD1306_WHITE);
-      printLabel("HAPPY!");
-      break;
-
-    case FACE_SAD:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1, ey+2, 3, SSD1306_BLACK);
-      display.fillCircle(ex2, ey+2, 3, SSD1306_BLACK);
-      display.fillCircle(ex1+2, ey+10, 2, SSD1306_WHITE);
-      display.fillCircle(ex2+2, ey+10, 2, SSD1306_WHITE);
-      for (int i=-14; i<=14; i++)
-        display.drawPixel(mx+i, my-(int)(0.025f*i*i)+5, SSD1306_WHITE);
-      printLabel("...");
-      break;
-
-    case FACE_ANGRY:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2, ey, 3, SSD1306_BLACK);
-      display.drawLine(ex1-8, ey-10, ex1+3, ey-5, SSD1306_WHITE);
-      display.drawLine(ex1-8, ey-9,  ex1+3, ey-4, SSD1306_WHITE);
-      display.drawLine(ex2+8, ey-10, ex2-3, ey-5, SSD1306_WHITE);
-      display.drawLine(ex2+8, ey-9,  ex2-3, ey-4, SSD1306_WHITE);
-      display.drawLine(mx-14, my+2, mx+14, my+2, SSD1306_WHITE);
-      display.drawLine(mx-14, my+2, mx-18, my+6, SSD1306_WHITE);
-      display.drawLine(mx+14, my+2, mx+18, my+6, SSD1306_WHITE);
-      printLabel("GRRRR!");
-      break;
-
-    case FACE_ANNOYED:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillRect(ex2-8, ey-8, 16, 7, SSD1306_BLACK);
-      display.fillCircle(ex2, ey+1, 3, SSD1306_BLACK);
-      display.drawLine(mx-12, my, mx+12, my, SSD1306_WHITE);
-      printLabel("-_-");
-      break;
-
-    case FACE_CUTE:
-      display.setTextSize(2);
-      display.setCursor(ex1-10, ey-8); display.print(">");
-      display.setCursor(ex2-4,  ey-8); display.print("<");
-      display.setTextSize(1);
-      display.fillCircle(mx, my-8, 2, SSD1306_WHITE);
-      display.drawLine(mx-12, my,   mx-6,  my+6, SSD1306_WHITE);
-      display.drawLine(mx-6,  my+6, mx,    my,   SSD1306_WHITE);
-      display.drawLine(mx,    my,   mx+6,  my+6, SSD1306_WHITE);
-      display.drawLine(mx+6,  my+6, mx+12, my,   SSD1306_WHITE);
-      printLabel("UwU");
-      break;
-
-    case FACE_SCARED:
-      display.fillCircle(ex1, ey, 10, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 10, SSD1306_WHITE);
-      display.fillCircle(ex1, ey,  5, SSD1306_BLACK);
-      display.fillCircle(ex2, ey,  5, SSD1306_BLACK);
-      display.fillCircle(ex1-2, ey-2, 2, SSD1306_WHITE);
-      display.fillCircle(ex2-2, ey-2, 2, SSD1306_WHITE);
-      gfx_ellipse(mx, my+2, 10, 7, SSD1306_WHITE);
-      gfx_ellipse(mx, my+2,  7, 4, SSD1306_BLACK);
-      printLabel("!!!");
-      break;
-
-    case FACE_WALK:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1+1, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2+1, ey, 3, SSD1306_BLACK);
-      for (int i=-10; i<=10; i++)
-        display.drawPixel(mx+i, my+(int)(0.02f*i*i), SSD1306_WHITE);
-      display.drawLine(110,32,122,32, SSD1306_WHITE);
-      display.drawLine(116,26,122,32, SSD1306_WHITE);
-      display.drawLine(116,38,122,32, SSD1306_WHITE);
-      printLabel("GO!");
-      break;
-
-    case FACE_TURN_L:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1-2, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2-2, ey, 3, SSD1306_BLACK);
-      display.drawLine(6,32,18,32, SSD1306_WHITE);
-      display.drawLine(6,32,12,26, SSD1306_WHITE);
-      display.drawLine(6,32,12,38, SSD1306_WHITE);
-      display.drawLine(mx-8, my, mx+8, my, SSD1306_WHITE);
-      printLabel("LEFT");
-      break;
-
-    case FACE_TURN_R:
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1+2, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2+2, ey, 3, SSD1306_BLACK);
-      display.drawLine(110,32,122,32, SSD1306_WHITE);
-      display.drawLine(116,26,122,32, SSD1306_WHITE);
-      display.drawLine(116,38,122,32, SSD1306_WHITE);
-      display.drawLine(mx-8, my, mx+8, my, SSD1306_WHITE);
-      printLabel("RIGHT");
-      break;
-
-    default: // FACE_NEUTRAL
-      display.fillCircle(ex1, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex2, ey, 7, SSD1306_WHITE);
-      display.fillCircle(ex1, ey, 3, SSD1306_BLACK);
-      display.fillCircle(ex2, ey, 3, SSD1306_BLACK);
-      display.drawLine(mx-8, my, mx+8, my, SSD1306_WHITE);
-      printLabel("...");
-      break;
-  }
-  display.display();
-}
 
 // ── Dimensioni robot ──────────────────────────────────────────
 const float length_a    = 55;
@@ -293,41 +108,19 @@ void setup() {
   delay(500);
   Serial.println("=== Spider Robot Boot ===");
 
-  // ── I2C scan: find OLED and PCA9685 ──────────────────────────
   Wire.begin();
   Serial.println("I2C scan...");
-  bool found_oled = false;
-  bool found_pca  = false;
+  bool found_pca = false;
   for (byte addr = 1; addr < 127; addr++) {
     Wire.beginTransmission(addr);
     if (Wire.endTransmission() == 0) {
       Serial.print("  I2C device at 0x");
       if (addr < 16) Serial.print("0");
       Serial.println(addr, HEX);
-      if (addr == 0x3C || addr == 0x3D) found_oled = true;
-      if (addr == 0x40 || addr == 0x41) found_pca  = true;
+      if (addr == 0x40 || addr == 0x41) found_pca = true;
     }
   }
-  if (!found_oled) Serial.println("  WARNING: OLED not found on I2C!");
-  if (!found_pca)  Serial.println("  WARNING: PCA9685 not found on I2C!");
-
-  // ── OLED: try 0x3C first, then 0x3D ──────────────────────────
-  bool oled_ok = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  if (!oled_ok) {
-    Serial.println("OLED 0x3C failed, trying 0x3D...");
-    oled_ok = display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
-  }
-  if (oled_ok) {
-    Serial.println("OLED OK");
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(1);
-    display.setCursor(20,20); display.println("Spider Robot");
-    display.setCursor(25,35); display.println("Starting...");
-    display.display();
-  } else {
-    Serial.println("OLED ERROR: check wiring SDA=A4 SCL=A5");
-  }
+  if (!found_pca) Serial.println("  WARNING: PCA9685 not found on I2C!");
 
   // ── PCA9685 ───────────────────────────────────────────────────
   pwm.begin();
@@ -360,7 +153,6 @@ void setup() {
       site_now[i][j] = site_expect[i][j];
 
   delay(500);
-  if (oled_ok) drawFace(FACE_HAPPY);
   Serial.println("READY");
 }
 
@@ -411,15 +203,13 @@ void ai_step() {
   if (!is_stand()) stand();
 
   if (dist_front < DANGER_DIST) {
-    drawFace(FACE_SCARED);
     delay(300);
-    if (dist_left > dist_right) { drawFace(FACE_TURN_L); turn_left(3); }
-    else                         { drawFace(FACE_TURN_R); turn_right(3); }
+    if (dist_left > dist_right) { turn_left(3); }
+    else                         { turn_right(3); }
   } else if (dist_front < WARN_DIST) {
-    if (dist_left > dist_right) { drawFace(FACE_TURN_L); turn_left(2); }
-    else                         { drawFace(FACE_TURN_R); turn_right(2); }
+    if (dist_left > dist_right) { turn_left(2); }
+    else                         { turn_right(2); }
   } else {
-    drawFace(FACE_WALK);
     step_forward(2);
   }
 }
@@ -438,23 +228,12 @@ void readSerial() {
 
 void parseCommand(char* line) {
   if (strcmp(line,"MODE_AI")==0) {
-    ai_mode=true; drawFace(FACE_CUTE);
+    ai_mode=true;
     Serial.println("ACK:MODE_AI"); return;
   }
   if (strcmp(line,"MODE_MANUAL")==0) {
-    ai_mode=false; drawFace(FACE_NEUTRAL);
+    ai_mode=false;
     Serial.println("ACK:MODE_MANUAL"); return;
-  }
-  if (strncmp(line,"FACE:",5)==0) {
-    char* fn=line+5;
-    if      (!strcmp(fn,"happy"))   drawFace(FACE_HAPPY);
-    else if (!strcmp(fn,"sad"))     drawFace(FACE_SAD);
-    else if (!strcmp(fn,"angry"))   drawFace(FACE_ANGRY);
-    else if (!strcmp(fn,"annoyed")) drawFace(FACE_ANNOYED);
-    else if (!strcmp(fn,"cute"))    drawFace(FACE_CUTE);
-    else if (!strcmp(fn,"scared"))  drawFace(FACE_SCARED);
-    else                             drawFace(FACE_NEUTRAL);
-    return;
   }
   if (strlen(line)==1) { executeMove(line[0]); return; }
   Serial.println("ERR:unknown");
@@ -463,12 +242,12 @@ void parseCommand(char* line) {
 void executeMove(char cmd) {
   if (!is_stand()) stand();
   switch(cmd) {
-    case 'F': drawFace(FACE_WALK);   step_forward(3); drawFace(FACE_NEUTRAL); break;
-    case 'B': drawFace(FACE_ANNOYED);step_back(3);    drawFace(FACE_NEUTRAL); break;
-    case 'L': drawFace(FACE_TURN_L); turn_left(3);    drawFace(FACE_NEUTRAL); break;
-    case 'R': drawFace(FACE_TURN_R); turn_right(3);   drawFace(FACE_NEUTRAL); break;
-    case 'S': drawFace(FACE_SAD);    sit();            break;
-    default:  Serial.println("ERR:unknown_move");     break;
+    case 'F': step_forward(3); break;
+    case 'B': step_back(3);    break;
+    case 'L': turn_left(3);    break;
+    case 'R': turn_right(3);   break;
+    case 'S': sit();           break;
+    default:  Serial.println("ERR:unknown_move"); break;
   }
 }
 

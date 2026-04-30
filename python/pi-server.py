@@ -51,8 +51,6 @@ dist_front = 99
 dist_left  = 99
 dist_right = 99
 last_cmd   = None
-mood       = "neutral"
-mood_timer = 0
 
 serial_lock  = threading.Lock()
 clients_lock = threading.Lock()
@@ -67,7 +65,6 @@ def send_to_arduino(cmd: str):
         except Exception as e:
             print(f"Serial write error: {e}")
 
-def send_face(name: str):   send_to_arduino(f"FACE:{name}")
 def send_move(cmd: str):
     global last_cmd
     if cmd != last_cmd:
@@ -110,22 +107,17 @@ def serial_reader():
             time.sleep(1)
 
 # ── Thread 2: push sonar a tutti i client ogni 300ms ──────────
-# FIX DEADLOCK: copia la lista PRIMA di rilasciare il lock,
-# poi chiama sendall() FUORI dal lock.
-# Se sendall() blocca su un client morto, non blocca gli altri.
 def broadcast_sonar():
     while True:
         try:
             msg = f"SONAR:{dist_front},{dist_left},{dist_right}\n".encode()
 
-            # --- snapshot veloce della lista, poi rilascia subito il lock ---
             with clients_lock:
                 snapshot = list(connected_clients)
 
             dead = []
             for conn in snapshot:
                 try:
-                    # timeout 0.5s: se il client non ACK entro 0.5s viene rimosso
                     conn.settimeout(0.5)
                     conn.sendall(msg)
                     conn.settimeout(None)
@@ -153,31 +145,13 @@ def decide_movement() -> str:
     if random.random() < 0.04: return random.choice(["L","R"])
     return "F"
 
-def decide_mood() -> str:
-    global mood, mood_timer
-    danger  = sum([dist_front < 8,  dist_left < 8,  dist_right < 8])
-    warning = sum([dist_front < 18, dist_left < 18, dist_right < 18])
-    if   danger  >= 2: mood = "scared";  mood_timer = 12
-    elif danger  == 1: mood = "angry";   mood_timer = 8
-    elif warning >= 2: mood = "annoyed"; mood_timer = 5
-    elif warning == 1: mood = "sad";     mood_timer = 4
-    else:
-        if mood_timer <= 0:
-            mood = random.choice(["happy","cute","neutral","happy"])
-            mood_timer = random.randint(15, 30)
-        else:
-            mood_timer -= 1
-    return mood
-
 def ai_loop():
     while True:
         try:
             if not is_manual:
-                cmd  = decide_movement()
-                face = decide_mood()
-                print(f"[AI] {cmd} | F={dist_front} L={dist_left} R={dist_right} | {face}")
+                cmd = decide_movement()
+                print(f"[AI] {cmd} | F={dist_front} L={dist_left} R={dist_right}")
                 send_move(cmd)
-                send_face(face)
         except Exception as e:
             print(f"ai_loop error: {e}")
         time.sleep(0.3)
@@ -186,7 +160,7 @@ def ai_loop():
 def handle_client(conn, addr):
     global is_manual
     print(f"Java client connected: {addr}")
-    conn.settimeout(30)   # 30s inactivity timeout
+    conn.settimeout(30)
     with clients_lock:
         connected_clients.append(conn)
     try:
@@ -208,8 +182,6 @@ def handle_client(conn, addr):
                     conn.sendall(b"ACK:MODE_MANUAL\n")
                 elif is_manual and cmd in ("F","B","L","R","S"):
                     send_move(cmd)
-                    faces = {"F":"happy","B":"annoyed","L":"cute","R":"cute","S":"neutral"}
-                    send_face(faces.get(cmd,"neutral"))
     except Exception as e:
         print(f"handle_client {addr}: {e}")
     finally:
