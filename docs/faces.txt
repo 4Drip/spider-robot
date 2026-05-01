@@ -1,5 +1,0 @@
-happy = ^_^
-sad = T_T
-angry = >_<
-annoyed = -_-
-cute = OwO

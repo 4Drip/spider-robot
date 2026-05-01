@@ -1,6 +1,5 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
-#include <NewPing.h>
 
 // ── PCA9685 ──────────────────────────────────────────────────
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
@@ -17,28 +16,6 @@ void pwm_write(int ch, float a) { pwm.setPWM(ch, 0, angleToPulse(a)); }
 const int servo_channel[4][3] = {
   { 0, 1, 2}, { 3, 4, 5}, { 6, 7, 8}, { 9,10,11}
 };
-
-#define TRIG_FRONT  9
-#define ECHO_FRONT  10
-#define TRIG_LEFT   5
-#define ECHO_LEFT   6
-#define TRIG_RIGHT  A0
-#define ECHO_RIGHT  A1
-
-#define MAX_DIST    200
-#define DANGER_DIST  10
-#define WARN_DIST    25
-
-NewPing sonar_front(TRIG_FRONT, ECHO_FRONT, MAX_DIST);
-NewPing sonar_left (TRIG_LEFT,  ECHO_LEFT,  MAX_DIST);
-NewPing sonar_right(TRIG_RIGHT, ECHO_RIGHT, MAX_DIST);
-
-unsigned int dist_front = 99, dist_left = 99, dist_right = 99;
-unsigned long last_sonar_ms = 0;
-#define SONAR_INTERVAL 200   // era 120 — ridotto per alleggerire il loop
-
-// ── Modalita ─────────────────────────────────────────────────
-bool ai_mode = false;
 
 // ── Dimensioni robot ──────────────────────────────────────────
 const float length_a    = 55;
@@ -68,10 +45,6 @@ const float pi   = 3.1415926;
 unsigned long last_servo_ms = 0;
 const unsigned long SERVO_INTERVAL = 20;
 
-// ── Delay tra scritture servo sequenziali (ms) ────────────────
-// Aumenta a 3-4 se i movimenti sembrano ancora scoordinati
-#define SERVO_SEQ_DELAY 2
-
 const float temp_a     = sqrt(pow(2*x_default+length_side,2)+pow(y_step,2));
 const float temp_b     = 2*(y_start+y_step)+length_side;
 const float temp_c_len = sqrt(pow(2*x_default+length_side,2)+pow(2*y_start+y_step+length_side,2));
@@ -91,7 +64,6 @@ void wait_reach(int);
 void wait_all_reach(void);
 void cartesian_to_polar(float&,float&,float&,float,float,float);
 void polar_to_servo(int,float,float,float);
-void polar_to_servo_seq(int,float,float,float);
 bool is_stand(void);
 void sit(void);
 void stand(void);
@@ -103,9 +75,6 @@ void step_forward(unsigned int);
 void step_back(unsigned int);
 void turn_left(unsigned int);
 void turn_right(unsigned int);
-void readSonars(void);
-void ai_step(void);
-void sendSensorData(void);
 
 // ─────────────────────────────────────────────────────────────
 void setup() {
@@ -115,40 +84,21 @@ void setup() {
 
   Wire.begin();
   Serial.println("I2C scan...");
-  bool found_pca = false;
   for (byte addr = 1; addr < 127; addr++) {
     Wire.beginTransmission(addr);
     if (Wire.endTransmission() == 0) {
       Serial.print("  I2C device at 0x");
       if (addr < 16) Serial.print("0");
       Serial.println(addr, HEX);
-      if (addr == 0x40 || addr == 0x41) found_pca = true;
     }
   }
-  if (!found_pca) Serial.println("  WARNING: PCA9685 not found on I2C!");
 
-  // ── PCA9685 ───────────────────────────────────────────────────
   pwm.begin();
   pwm.setOscillatorFrequency(27000000);
   pwm.setPWMFreq(SERVO_FREQ);
   delay(10);
   Serial.println("PCA9685 init done");
 
-  // ── Sonar digital pins ────────────────────────────────────────
-  pinMode(TRIG_FRONT, OUTPUT); pinMode(ECHO_FRONT, INPUT);
-  pinMode(TRIG_LEFT,  OUTPUT); pinMode(ECHO_LEFT,  INPUT);
-  pinMode(TRIG_RIGHT, OUTPUT); pinMode(ECHO_RIGHT, INPUT);
-  Serial.println("Sonar pins OK");
-
-  // ── Test sonar quickly ────────────────────────────────────────
-  unsigned int tf = sonar_front.ping_cm();
-  unsigned int tl = sonar_left.ping_cm();
-  unsigned int tr = sonar_right.ping_cm();
-  Serial.print("Sonar test: F="); Serial.print(tf ? tf : 99);
-  Serial.print(" L="); Serial.print(tl ? tl : 99);
-  Serial.print(" R="); Serial.println(tr ? tr : 99);
-
-  // ── Servo initial positions ───────────────────────────────────
   set_site(0, x_default-x_offset, y_start+y_step, z_boot);
   set_site(1, x_default-x_offset, y_start+y_step, z_boot);
   set_site(2, x_default+x_offset, y_start,         z_boot);
@@ -164,59 +114,11 @@ void setup() {
 // ─────────────────────────────────────────────────────────────
 void loop() {
   unsigned long now = millis();
-
   if (now - last_servo_ms >= SERVO_INTERVAL) {
     last_servo_ms = now;
     servo_service();
   }
-
-  if (now - last_sonar_ms >= SONAR_INTERVAL) {
-    last_sonar_ms = now;
-    readSonars();
-    sendSensorData();
-  }
-
   readSerial();
-
-  if (ai_mode) ai_step();
-}
-
-// ── Sonar ─────────────────────────────────────────────────────
-void readSonars() {
-  dist_front = sonar_front.ping_cm(); delay(15);
-  dist_left  = sonar_left.ping_cm();  delay(15);
-  dist_right = sonar_right.ping_cm();
-  if (!dist_front) dist_front = 99;
-  if (!dist_left)  dist_left  = 99;
-  if (!dist_right) dist_right = 99;
-}
-
-void sendSensorData() {
-  Serial.print("SONAR:");
-  Serial.print(dist_front); Serial.print(",");
-  Serial.print(dist_left);  Serial.print(",");
-  Serial.println(dist_right);
-}
-
-// ── AI locale ─────────────────────────────────────────────────
-unsigned long last_ai_ms = 0;
-#define AI_INTERVAL 400
-
-void ai_step() {
-  if (millis() - last_ai_ms < AI_INTERVAL) return;
-  last_ai_ms = millis();
-  if (!is_stand()) stand();
-
-  if (dist_front < DANGER_DIST) {
-    delay(300);
-    if (dist_left > dist_right) { turn_left(3); }
-    else                         { turn_right(3); }
-  } else if (dist_front < WARN_DIST) {
-    if (dist_left > dist_right) { turn_left(2); }
-    else                         { turn_right(2); }
-  } else {
-    step_forward(2);
-  }
 }
 
 // ── Serial ────────────────────────────────────────────────────
@@ -232,14 +134,6 @@ void readSerial() {
 }
 
 void parseCommand(char* line) {
-  if (strcmp(line,"MODE_AI")==0) {
-    ai_mode=true;
-    Serial.println("ACK:MODE_AI"); return;
-  }
-  if (strcmp(line,"MODE_MANUAL")==0) {
-    ai_mode=false;
-    Serial.println("ACK:MODE_MANUAL"); return;
-  }
   if (strlen(line)==1) { executeMove(line[0]); return; }
   Serial.println("ERR:unknown");
 }
@@ -257,8 +151,6 @@ void executeMove(char cmd) {
 }
 
 // ── Servo service ─────────────────────────────────────────────
-// Usa polar_to_servo_seq: scrive i servo uno alla volta con
-// un piccolo delay tra ognuno per ridurre il picco di corrente.
 void servo_service(void) {
   float alpha,beta,gamma;
   for (int i=0;i<4;i++) {
@@ -270,7 +162,7 @@ void servo_service(void) {
     }
     cartesian_to_polar(alpha,beta,gamma,
       site_now[i][0],site_now[i][1],site_now[i][2]);
-    polar_to_servo_seq(i,alpha,beta,gamma);   // <-- sequenziale
+    polar_to_servo(i,alpha,beta,gamma);
   }
 }
 
@@ -287,7 +179,6 @@ void cartesian_to_polar(float &alpha,float &beta,float &gamma,
   alpha=alpha/pi*180; beta=beta/pi*180; gamma=gamma/pi*180;
 }
 
-// Versione originale (non usata, mantenuta come riferimento)
 void polar_to_servo(int leg,float alpha,float beta,float gamma) {
   if      (leg==0){alpha=90-alpha;gamma+=90;}
   else if (leg==1){alpha+=90;beta=180-beta;gamma=90-gamma;}
@@ -296,18 +187,6 @@ void polar_to_servo(int leg,float alpha,float beta,float gamma) {
   pwm_write(servo_channel[leg][0],alpha);
   pwm_write(servo_channel[leg][1],beta);
   pwm_write(servo_channel[leg][2],gamma);
-}
-
-// Versione sequenziale: un servo alla volta con pausa
-// Riduce il picco di corrente da ~8A a ~1-2A
-void polar_to_servo_seq(int leg,float alpha,float beta,float gamma) {
-  if      (leg==0){alpha=90-alpha;gamma+=90;}
-  else if (leg==1){alpha+=90;beta=180-beta;gamma=90-gamma;}
-  else if (leg==2){alpha+=90;beta=180-beta;gamma=90-gamma;}
-  else if (leg==3){alpha=90-alpha;gamma+=90;}
-  pwm_write(servo_channel[leg][0],alpha);  delay(SERVO_SEQ_DELAY);
-  pwm_write(servo_channel[leg][1],beta);   delay(SERVO_SEQ_DELAY);
-  pwm_write(servo_channel[leg][2],gamma);  delay(SERVO_SEQ_DELAY);
 }
 
 // ── set_site / wait ────────────────────────────────────────────
