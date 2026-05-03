@@ -18,7 +18,7 @@ This project was developed as a school robotics project.
 
 ## Credits
 
-The 3D models of the spider and part of the Arduino code used in this project were adapted from the public repository by [anoochit](https://github.com/anoochit/arduino-quadruped-robot/tree/master/Arduino).
+The 3D models of the spider and part of the Arduino code used in this project were adapted from the public repository by [anoochit](https://github.com/anoochit/arduino-quadruped-robot/tree/master).
 
 ## 🇮🇹 Italiano
 
@@ -40,4 +40,4 @@ Questo progetto è stato sviluppato come progetto scolastico di robotica.
 
 ## Crediti
 
-I modelli 3D del ragno e parte del codice arduino sono stati presi dalla repo pubblica di (anoochit)[https://github.com/anoochit/arduino-quadruped-robot/tree/master/Arduino]
+I modelli 3D del ragno e parte del codice arduino sono stati presi dalla repo pubblica di [anoochit](https://github.com/anoochit/arduino-quadruped-robot/tree/master)
