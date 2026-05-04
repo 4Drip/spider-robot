@@ -180,10 +180,10 @@ void cartesian_to_polar(float &alpha,float &beta,float &gamma,
 }
 
 void polar_to_servo(int leg,float alpha,float beta,float gamma) {
-  if      (leg==0){alpha=90-alpha;gamma+=90;}
-  else if (leg==1){alpha+=90;beta=180-beta;gamma=90-gamma;}
-  else if (leg==2){alpha+=90;beta=180-beta;gamma=90-gamma;}
-  else if (leg==3){alpha=90-alpha;gamma+=90;}
+  if      (leg==0) { alpha = 90-alpha; gamma += 90; }   // ← questi segni
+  else if (leg==1) { alpha += 90; beta = 180-beta; gamma = 90-gamma; }
+  else if (leg==2) { alpha += 90; beta = 180-beta; gamma = 90-gamma; }
+  else if (leg==3) { alpha = 90-alpha; gamma += 90; }
   pwm_write(servo_channel[leg][0],alpha);
   pwm_write(servo_channel[leg][1],beta);
   pwm_write(servo_channel[leg][2],gamma);
