@@ -1,3 +1,5 @@
+<img width="2032" height="1524" alt="WhatsApp Image 2026-05-04 at 8 52 55 PM" src="https://github.com/user-attachments/assets/d1a22d74-c5b9-40e3-a680-bfba84a784df" />
+
 ## 🇺🇸/🇬🇧 English
 
 This project is a small four-legged spider robot controlled by an Arduino and a Raspberry Pi.
