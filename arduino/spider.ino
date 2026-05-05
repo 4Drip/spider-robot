@@ -64,13 +64,6 @@ void wait_reach(int);
 void wait_all_reach(void);
 void cartesian_to_polar(float&,float&,float&,float,float,float);
 void polar_to_servo(int,float,float,float);
-bool is_stand(void);
-void sit(void);
-void stand(void);
-void legs_init(void);
-void body_left(int); void body_right(int);
-void head_up(int);   void head_down(int);
-void hand_wave(int); void hand_shake(int);
 void step_forward(unsigned int);
 void step_back(unsigned int);
 void turn_left(unsigned int);
@@ -139,13 +132,12 @@ void parseCommand(char* line) {
 }
 
 void executeMove(char cmd) {
-  if (!is_stand()) stand();
   switch(cmd) {
     case 'F': step_forward(3); break;
     case 'B': step_back(3);    break;
     case 'L': turn_left(3);    break;
     case 'R': turn_right(3);   break;
-    case 'S': sit();           break;
+    case 'S': /* stop - hold position */ break;
     default:  Serial.println("ERR:unknown_move"); break;
   }
 }
@@ -180,10 +172,10 @@ void cartesian_to_polar(float &alpha,float &beta,float &gamma,
 }
 
 void polar_to_servo(int leg,float alpha,float beta,float gamma) {
-  if      (leg==0) { alpha = 90-alpha; gamma += 90; }   // ← questi segni
-  else if (leg==1) { alpha += 90; beta = 180-beta; gamma = 90-gamma; }
-  else if (leg==2) { alpha += 90; beta = 180-beta; gamma = 90-gamma; }
-  else if (leg==3) { alpha = 90-alpha; gamma += 90; }
+  if      (leg==0){alpha=90-alpha;gamma+=90;}
+  else if (leg==1){alpha+=90;beta=180-beta;gamma=90-gamma;}
+  else if (leg==2){alpha+=90;beta=180-beta;gamma=90-gamma;}
+  else if (leg==3){alpha=90-alpha;gamma+=90;}
   pwm_write(servo_channel[leg][0],alpha);
   pwm_write(servo_channel[leg][1],beta);
   pwm_write(servo_channel[leg][2],gamma);
@@ -215,94 +207,6 @@ void wait_reach(int leg) {
 void wait_all_reach(void){for(int i=0;i<4;i++)wait_reach(i);}
 
 // ── Movimento base ─────────────────────────────────────────────
-bool is_stand(void){return site_now[0][2]==z_default;}
-
-void sit(void){
-  move_speed=stand_seat_speed;
-  for(int l=0;l<4;l++)set_site(l,KEEP,KEEP,z_boot);
-  wait_all_reach();
-}
-void stand(void){
-  move_speed=stand_seat_speed;
-  for(int l=0;l<4;l++)set_site(l,KEEP,KEEP,z_default);
-  wait_all_reach();
-}
-void legs_init(void){
-  move_speed=8;
-  for(int l=0;l<4;l++)set_site(l,KEEP,0,90);
-  wait_all_reach();
-}
-
-void body_left(int i){
-  set_site(0,site_now[0][0]+i,KEEP,KEEP);set_site(1,site_now[1][0]+i,KEEP,KEEP);
-  set_site(2,site_now[2][0]-i,KEEP,KEEP);set_site(3,site_now[3][0]-i,KEEP,KEEP);
-  wait_all_reach();
-}
-void body_right(int i){
-  set_site(0,site_now[0][0]-i,KEEP,KEEP);set_site(1,site_now[1][0]-i,KEEP,KEEP);
-  set_site(2,site_now[2][0]+i,KEEP,KEEP);set_site(3,site_now[3][0]+i,KEEP,KEEP);
-  wait_all_reach();
-}
-void head_up(int i){
-  set_site(0,KEEP,KEEP,site_now[0][2]-i);set_site(1,KEEP,KEEP,site_now[1][2]+i);
-  set_site(2,KEEP,KEEP,site_now[2][2]-i);set_site(3,KEEP,KEEP,site_now[3][2]+i);
-  wait_all_reach();
-}
-void head_down(int i){
-  set_site(0,KEEP,KEEP,site_now[0][2]+i);set_site(1,KEEP,KEEP,site_now[1][2]-i);
-  set_site(2,KEEP,KEEP,site_now[2][2]+i);set_site(3,KEEP,KEEP,site_now[3][2]-i);
-  wait_all_reach();
-}
-
-void hand_wave(int i){
-  float xt,yt,zt; move_speed=1;
-  if(site_now[3][1]==y_start){
-    body_right(15);
-    xt=site_now[2][0];yt=site_now[2][1];zt=site_now[2][2];
-    move_speed=body_move_speed;
-    for(int j=0;j<i;j++){
-      set_site(2,turn_x1,turn_y1,50);wait_all_reach();
-      set_site(2,turn_x0,turn_y0,50);wait_all_reach();
-    }
-    set_site(2,xt,yt,zt);wait_all_reach();
-    move_speed=1;body_left(15);
-  }else{
-    body_left(15);
-    xt=site_now[0][0];yt=site_now[0][1];zt=site_now[0][2];
-    move_speed=body_move_speed;
-    for(int j=0;j<i;j++){
-      set_site(0,turn_x1,turn_y1,50);wait_all_reach();
-      set_site(0,turn_x0,turn_y0,50);wait_all_reach();
-    }
-    set_site(0,xt,yt,zt);wait_all_reach();
-    move_speed=1;body_right(15);
-  }
-}
-
-void hand_shake(int i){
-  float xt,yt,zt; move_speed=1;
-  if(site_now[3][1]==y_start){
-    body_right(15);
-    xt=site_now[2][0];yt=site_now[2][1];zt=site_now[2][2];
-    move_speed=body_move_speed;
-    for(int j=0;j<i;j++){
-      set_site(2,x_default-30,y_start+2*y_step,55);wait_all_reach();
-      set_site(2,x_default-30,y_start+2*y_step,10);wait_all_reach();
-    }
-    set_site(2,xt,yt,zt);wait_all_reach();
-    move_speed=1;body_left(15);
-  }else{
-    body_left(15);
-    xt=site_now[0][0];yt=site_now[0][1];zt=site_now[0][2];
-    move_speed=body_move_speed;
-    for(int j=0;j<i;j++){
-      set_site(0,x_default-30,y_start+2*y_step,55);wait_all_reach();
-      set_site(0,x_default-30,y_start+2*y_step,10);wait_all_reach();
-    }
-    set_site(0,xt,yt,zt);wait_all_reach();
-    move_speed=1;body_right(15);
-  }
-}
 
 void step_forward(unsigned int step){
   move_speed=leg_move_speed;
