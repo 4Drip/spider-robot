@@ -139,6 +139,8 @@ public class RobotController {
                 if (line == null) {
                     SwingUtilities.invokeLater(() -> lblStatus.setText("Disconnesso"));
                     break;
+                }
+                // ignora tutto (niente sonar display)
             } catch (SocketTimeoutException ex) {
                 // normale, continua
             } catch (IOException ex) {
