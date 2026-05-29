@@ -4,7 +4,7 @@
 
 This project is a small four-legged spider robot controlled by an Arduino and a Raspberry Pi.
 
-The spider’s movements are executed by the Arduino board, which processes commands sent by a dedicated Java application and received through a TCP Wi-Fi connection from the Raspberry Pi.
+The spider’s movements are executed by the Arduino board, which processes commands sent by a dedicated Java application and received through a TCP Wi-Fi connection from the Raspberry Pi. 
 
 The goal of the project is to create a robot capable of performing movements remotely controlled through a dedicated application over the network.
 
